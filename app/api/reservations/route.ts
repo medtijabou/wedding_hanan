@@ -4,14 +4,14 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getSupabaseClient } from "@/lib/supabase"
 import sgMail from "@sendgrid/mail"
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY!) // clé SendGrid
+sgMail.setApiKey(process.env.SENDGRID_API_KEY!)
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const supabase = getSupabaseClient()
 
-    // Insérer la réservation dans Supabase
+    // 1. Insertar en Supabase
     const { data, error } = await supabase
       .from("reservations")
       .insert([body])
@@ -22,18 +22,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to create reservation" }, { status: 500 })
     }
 
-    // --- ENVOI D'EMAIL ---
+    // 2. --- ENVOI D'EMAIL ---
     if (body.email) {
       try {
+        // Extraemos los datos del body (los mismos nombres que usas en React)
+        const { full_name, email, phone, wedding_date, guest_count, services, message } = body
+
         await sgMail.send({
-          to: body.email, // email du client
-          from: process.env.SENDGRID_SENDER_EMAIL!, // ton email vérifié
-          subject: "Confirmation de réservation",
-          text: `Bonjour ${body.full_name},\n\nVotre réservation a été enregistrée avec succès !\n\nMerci.`,
-          html: `<p>Bonjour <strong>${body.full_name}</strong>,</p><p>Votre réservation a été enregistrée avec succès !</p><p>Merci.</p>`,
+          to: email, // El cliente recibe su confirmación
+          bcc: process.env.SENDGRID_SENDER_EMAIL!, // TÚ recibes una copia con todos los datos
+          from: process.env.SENDGRID_SENDER_EMAIL!,
+          subject: `Nueva reserva: ${full_name}`,
+          text: `Reserva de ${full_name}. Teléfono: ${phone}. Fecha: ${wedding_date}. Mensaje: ${message}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; color: #333;">
+              <h2>Detalles de la Reserva</h2>
+              <p><strong>Nombre:</strong> ${full_name}</p>
+              <p><strong>Email:</strong> ${email}</p>
+              <p><strong>Teléfono:</strong> ${phone}</p>
+              <p><strong>Fecha de boda:</strong> ${wedding_date}</p>
+              <p><strong>Invitados:</strong> ${guest_count}</p>
+              <p><strong>Servicios:</strong> ${services?.join(", ") || "Ninguno"}</p>
+              <p><strong>Mensaje:</strong> ${message}</p>
+              <hr />
+              <p>Esta es una copia de la confirmación enviada al cliente.</p>
+            </div>
+          `,
         })
-      } catch (mailError) {
-        console.error("Error sending email:", mailError)
+      } catch (mailError: any) {
+        // Esto te ayudará a ver en los logs de Vercel/Terminal por qué falla
+        console.error("SendGrid Detailed Error:", mailError.response?.body || mailError)
       }
     }
 
