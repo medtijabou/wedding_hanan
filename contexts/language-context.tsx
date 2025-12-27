@@ -1,65 +1,51 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { defaultTranslations, type Language } from "@/lib/translations"
+import React, { createContext, useContext, useState, useEffect } from "react"
+// Importamos las definiciones desde tu archivo de libreria
+import { defaultTranslations, type Language } from "@/lib/translations" 
 
-interface LanguageContextType {
+// 1. Definimos la forma de los datos que tendrá el contexto
+type LanguageContextType = {
   language: Language
   setLanguage: (lang: Language) => void
   translations: Record<string, string>
-  isLoading: boolean
 }
 
+// 2. Creamos el contexto (Esto resuelve el error "Cannot find name LanguageContext")
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined)
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>("es")
-  const [translations, setTranslations] = useState<Record<string, string>>(defaultTranslations.es)
-  const [isLoading, setIsLoading] = useState(false)
+export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  // 3. Estado inicial (français por defecto)
+  const [language, setLanguage] = useState<Language>("fr")
 
+  // 4. Detección automática del idioma del navegador
   useEffect(() => {
-    // Load language from localStorage
-    const savedLanguage = localStorage.getItem("language") as Language
-    if (savedLanguage) {
-      setLanguageState(savedLanguage)
-      setTranslations(defaultTranslations[savedLanguage])
+    const browserLang = window.navigator.language.split("-")[0] as Language
+    const supported: Language[] = ["es", "fr", "ar", "en"]
+    
+    if (supported.includes(browserLang)) {
+      setLanguage(browserLang)
     }
   }, [])
 
-  useEffect(() => {
-    setTranslations(defaultTranslations[language])
-
-    async function loadTranslations() {
-      setIsLoading(true)
-      try {
-        const response = await fetch(`/api/translations?language=${language}`)
-        const data = await response.json()
-        setTranslations({ ...defaultTranslations[language], ...data })
-      } catch (error) {
-        console.error("Error loading translations:", error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    loadTranslations()
-  }, [language])
-
-  const setLanguage = (lang: Language) => {
-    setLanguageState(lang)
-    localStorage.setItem("language", lang)
-    // Update document direction for Arabic
-    document.documentElement.dir = lang === "ar" ? "rtl" : "ltr"
-    document.documentElement.lang = lang
+  // 5. El objeto que repartiremos por toda la web
+  const value = {
+    language,
+    setLanguage,
+    translations: defaultTranslations[language] || defaultTranslations["fr"]
   }
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, translations, isLoading }}>
-      {children}
+    <LanguageContext.Provider value={value}>
+      {/* Añadimos soporte visual para Árabe (RTL) */}
+      <div dir={language === "ar" ? "rtl" : "ltr"}>
+        {children}
+      </div>
     </LanguageContext.Provider>
   )
 }
 
+// 6. El Hook que usarás en tus componentes (Como en ReservationForm)
 export function useLanguage() {
   const context = useContext(LanguageContext)
   if (context === undefined) {
